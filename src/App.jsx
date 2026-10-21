@@ -1,180 +1,209 @@
-import { useState, useEffect } from 'react';
-
-// GANTI DENGAN URL APPS SCRIPT KAMU
-const API_URL = "https://script.google.com/macros/s/AKfycbwMsbNYnwkRo71c87GGIS8-N2YhHFgm84lU4t2sD91tCPfaijHbBv8pIwJFfC_mYOepHg/exec";
+import { useState, useEffect } from "react";
 
 export default function App() {
-  const [user, setUser] = useState(localStorage.getItem("user") || "");
+  const [user, setUser] = useState("");
   const [password, setPassword] = useState("");
-  const [view, setView] = useState("transaksi"); // 'transaksi' atau 'rencana'
-  
-  // Form States
-  const [tipe, setTipe] = useState("Pengeluaran");
-  const [nominal, setNominal] = useState("");
-  const [keterangan, setKeterangan] = useState("");
-  const [tanggal, setTanggal] = useState("");
-  
-  // Data States
-  const [dataTransaksi, setDataTransaksi] = useState([]);
-  const [dataRencana, setDataRencana] = useState([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [loading, setLoading] = useState(false);
+  
+  const [summary, setSummary] = useState({ pemasukan: 0, pengeluaran: 0, saldo: 0 });
+
+  // Ganti dengan URL Google Apps Script kamu
+  const GAS_URL = "https://script.google.com/macros/library/d/1znMs2pYzxTCNdFtw5rEWAuiABVhd8W5zrIcxS5vI9rrdeku-bXx3W1Ob/2";
+
+  useEffect(() => {
+    if (isLoggedIn && activeTab === "dashboard") {
+      fetchDashboard();
+    }
+  }, [isLoggedIn, activeTab]);
+
+  const fetchDashboard = async () => {
+    try {
+      const res = await fetch(GAS_URL);
+      const data = await res.json();
+      setSummary(data);
+    } catch (error) {
+      console.error("Gagal memuat data dashboard", error);
+    }
+  };
 
   const handleLogin = (e) => {
     e.preventDefault();
-    // Sistem login sederhana. Password bisa disesuaikan.
-    if ((user === "Syifa" && password === "syifa123") || (user === "Andi" && password === "andi123")) {
-      localStorage.setItem("user", user);
-      fetchData();
+    if ((user === "syifa" && password === "pass-syifa123") || 
+        (user === "andi" && password === "pass-andi123")) {
+      setIsLoggedIn(true);
     } else {
-      alert("Akun atau Password salah!");
-      setUser("");
+      alert("Username atau password salah!");
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    setUser("");
-    setPassword("");
-  };
-
-  const fetchData = async () => {
+  const submitTransaksi = async (e) => {
+    e.preventDefault();
     setLoading(true);
-    try {
-      const res = await fetch(API_URL);
-      const json = await res.json();
-      setDataTransaksi(json.transaksi);
-      setDataRencana(json.rencana);
-    } catch (err) {
-      console.error(err);
-    }
+    const formData = new FormData();
+    formData.append("action", "transaksi");
+    formData.append("tanggal", e.target.tanggal.value);
+    formData.append("tipe", e.target.tipe.value);
+    formData.append("nominal", e.target.nominal.value);
+    formData.append("keterangan", e.target.keterangan.value);
+    formData.append("user", user);
+
+    await fetch(GAS_URL, { method: "POST", body: formData, mode: "no-cors" });
+    alert("Transaksi berhasil dicatat!");
+    e.target.reset();
+    setLoading(false);
+    setActiveTab("dashboard");
+  };
+
+  const submitRencana = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("action", "rencana");
+    formData.append("tanggal", e.target.tanggal.value);
+    formData.append("item", e.target.item.value);
+    formData.append("harga", e.target.harga.value);
+    formData.append("user", user);
+
+    await fetch(GAS_URL, { method: "POST", body: formData, mode: "no-cors" });
+    alert("Rencana belanja berhasil dicatat!");
+    e.target.reset();
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (user) fetchData();
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    const payload = view === "transaksi" 
-      ? { action: "transaksi", tipe, nominal, keterangan, user }
-      : { action: "rencana", tanggal, kebutuhan: keterangan, estimasi: nominal, user };
-
-    await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    
-    setNominal("");
-    setKeterangan("");
-    setTanggal("");
-    alert("Data berhasil disimpan!");
-    fetchData(); // Refresh data biar transparan langsung terlihat
+  const formatRp = (angka) => {
+    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(angka);
   };
 
-  if (!localStorage.getItem("user") && !user) {
+  if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <form onSubmit={handleLogin} className="bg-white p-6 rounded-lg shadow-md w-80">
-          <h2 className="text-xl font-bold mb-4 text-center">Login Keuangan</h2>
-          <select 
-            value={user} 
-            onChange={(e) => setUser(e.target.value)} 
-            className="w-full mb-3 p-2 border rounded" required>
-            <option value="">Pilih Akun...</option>
-            <option value="Syifa">Syifa</option>
-            <option value="Andi">Andi</option>
-          </select>
-          <input 
-            type="password" 
-            placeholder="Password" 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
-            className="w-full mb-4 p-2 border rounded" required 
-          />
-          <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded">Masuk</button>
-        </form>
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Keuangan Kita</h1>
+            <p className="text-sm text-gray-500 mt-1">Transparansi itu penting 💙</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <input 
+                type="text" 
+                placeholder="Username (syifa / andi)" 
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                onChange={(e) => setUser(e.target.value.toLowerCase())} 
+                required 
+              />
+            </div>
+            <div>
+              <input 
+                type="password" 
+                placeholder="Password" 
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                onChange={(e) => setPassword(e.target.value)} 
+                required 
+              />
+              <p className="text-xs text-gray-400 mt-2">
+                *Password Syifa: <b>pass-syifa123</b> <br/>
+                *Password Andi: <b>pass-andi123</b>
+              </p>
+            </div>
+            <button type="submit" className="w-full bg-blue-600 text-white font-semibold p-3 rounded-lg hover:bg-blue-700 transition">
+              Masuk
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 font-sans">
-      <div className="max-w-md mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Halo, {user}</h1>
-          <button onClick={handleLogout} className="text-sm bg-red-500 text-white px-3 py-1 rounded">Logout</button>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <button 
-            onClick={() => setView("transaksi")} 
-            className={`flex-1 py-2 rounded ${view === 'transaksi' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
-            Input Harian
-          </button>
-          <button 
-            onClick={() => setView("rencana")} 
-            className={`flex-1 py-2 rounded ${view === 'rencana' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>
-            Rencana Beli
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg shadow-sm mb-6 border">
-          {view === "transaksi" ? (
-            <>
-              <select value={tipe} onChange={(e) => setTipe(e.target.value)} className="w-full mb-3 p-2 border rounded">
-                <option value="Pengeluaran">Pengeluaran</option>
-                <option value="Pemasukan">Pemasukan</option>
-              </select>
-              <input type="number" placeholder="Nominal (Rp)" value={nominal} onChange={(e) => setNominal(e.target.value)} className="w-full mb-3 p-2 border rounded" required />
-              <input type="text" placeholder="Keterangan (ex: Makan, Bensin)" value={keterangan} onChange={(e) => setKeterangan(e.target.value)} className="w-full mb-3 p-2 border rounded" required />
-            </>
-          ) : (
-            <>
-              <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className="w-full mb-3 p-2 border rounded" required />
-              <input type="text" placeholder="Kebutuhan (ex: Beras, Pampers)" value={keterangan} onChange={(e) => setKeterangan(e.target.value)} className="w-full mb-3 p-2 border rounded" required />
-              <input type="number" placeholder="Estimasi Harga (Rp)" value={nominal} onChange={(e) => setNominal(e.target.value)} className="w-full mb-3 p-2 border rounded" required />
-            </>
-          )}
-          <button type="submit" disabled={loading} className={`w-full text-white p-2 rounded ${view === 'transaksi' ? 'bg-blue-600' : 'bg-green-600'}`}>
-            {loading ? "Menyimpan..." : "Simpan Catatan"}
-          </button>
-        </form>
-
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <div className="flex justify-between items-center mb-3">
-             <h3 className="font-bold">Histori Terakhir</h3>
-             <button onClick={fetchData} className="text-xs text-blue-500 underline">Refresh</button>
+    <div className="min-h-screen bg-gray-50 pb-20 md:p-8">
+      <div className="max-w-md mx-auto bg-white md:rounded-2xl shadow-sm md:shadow-lg overflow-hidden min-h-screen md:min-h-0">
+        
+        <div className="bg-blue-600 p-5 text-white flex justify-between items-center rounded-b-2xl md:rounded-none">
+          <div>
+            <p className="text-sm opacity-80">Selamat datang,</p>
+            <h1 className="text-xl font-bold capitalize">{user}</h1>
           </div>
-          
-          {view === "transaksi" ? (
-            <ul className="space-y-3">
-              {dataTransaksi.map((item, idx) => (
-                <li key={idx} className="flex justify-between text-sm border-b pb-2">
-                  <div>
-                    <span className="font-semibold block">{item[3]}</span>
-                    <span className="text-xs text-gray-400">{new Date(item[0]).toLocaleDateString('id-ID')} • Oleh: {item[4]}</span>
-                  </div>
-                  <div className={`font-bold ${item[1] === 'Pemasukan' ? 'text-green-500' : 'text-red-500'}`}>
-                    {item[1] === 'Pemasukan' ? '+' : '-'}Rp{item[2]}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-             <ul className="space-y-3">
-              {dataRencana.map((item, idx) => (
-                <li key={idx} className="flex justify-between text-sm border-b pb-2">
-                  <div>
-                    <span className="font-semibold block">{item[1]}</span>
-                    <span className="text-xs text-gray-400">Target: {new Date(item[0]).toLocaleDateString('id-ID')} • Oleh: {item[3]}</span>
-                  </div>
-                  <div className="font-bold text-gray-700">Rp{item[2]}</div>
-                </li>
-              ))}
-            </ul>
+          <button onClick={() => setIsLoggedIn(false)} className="bg-white/20 px-3 py-1 rounded-full text-sm hover:bg-white/30 transition">
+            Keluar
+          </button>
+        </div>
+
+        <div className="flex border-b mt-2">
+          <button onClick={() => setActiveTab("dashboard")} className={`flex-1 p-3 text-sm font-medium ${activeTab === "dashboard" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500"}`}>Dashboard</button>
+          <button onClick={() => setActiveTab("transaksi")} className={`flex-1 p-3 text-sm font-medium ${activeTab === "transaksi" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500"}`}>Catat</button>
+          <button onClick={() => setActiveTab("rencana")} className={`flex-1 p-3 text-sm font-medium ${activeTab === "rencana" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500"}`}>Rencana</button>
+        </div>
+
+        <div className="p-5">
+          {activeTab === "dashboard" && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <p className="text-sm text-blue-600 font-medium">Sisa Saldo Saat Ini</p>
+                <h2 className="text-3xl font-bold text-gray-800 mt-1">{formatRp(summary.saldo)}</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                  <p className="text-xs text-green-600 font-medium mb-1">Total Pemasukan</p>
+                  <p className="text-lg font-bold text-gray-800">{formatRp(summary.pemasukan)}</p>
+                </div>
+                <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                  <p className="text-xs text-red-600 font-medium mb-1">Total Pengeluaran</p>
+                  <p className="text-lg font-bold text-gray-800">{formatRp(summary.pengeluaran)}</p>
+                </div>
+              </div>
+              <button onClick={fetchDashboard} className="w-full mt-2 text-sm text-gray-500 hover:text-blue-600 underline">
+                Refresh Data
+              </button>
+            </div>
+          )}
+
+          {activeTab === "transaksi" && (
+            <form onSubmit={submitTransaksi} className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Tanggal</label>
+                <input type="date" name="tanggal" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Jenis Transaksi</label>
+                <select name="tipe" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required>
+                  <option value="Uang Keluar">Uang Keluar 🔻</option>
+                  <option value="Uang Masuk">Uang Masuk 🟢</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Nominal (Rp)</label>
+                <input type="number" name="nominal" placeholder="Contoh: 50000" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Untuk Apa?</label>
+                <input type="text" name="keterangan" placeholder="Contoh: Beli token listrik" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required />
+              </div>
+              <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-semibold p-3 rounded-lg hover:bg-blue-700 transition mt-4">
+                {loading ? "Menyimpan..." : "Simpan Transaksi"}
+              </button>
+            </form>
+          )}
+
+          {activeTab === "rencana" && (
+            <form onSubmit={submitRencana} className="space-y-4">
+               <div>
+                <label className="text-sm text-gray-600 font-medium">Target Tanggal Beli</label>
+                <input type="date" name="tanggal" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Nama Barang / Keperluan</label>
+                <input type="text" name="item" placeholder="Contoh: Susu Anak" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Estimasi Harga (Rp)</label>
+                <input type="number" name="harga" placeholder="Contoh: 150000" className="w-full p-2.5 mt-1 border rounded-lg bg-gray-50" required />
+              </div>
+              <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white font-semibold p-3 rounded-lg hover:bg-indigo-700 transition mt-4">
+                {loading ? "Menyimpan..." : "Masukkan Rencana Belanja"}
+              </button>
+            </form>
           )}
         </div>
       </div>
